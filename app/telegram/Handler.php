@@ -18,4 +18,9 @@ class Handler extends WebhookHandler
     {
         $this->reply("Начнем Работу");
     }
+
+    public function handleChatMessage($message): void
+    {
+        $this->reply($message);
+    }
 }
