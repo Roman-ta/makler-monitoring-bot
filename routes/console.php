@@ -10,4 +10,8 @@ Artisan::command('inspire', function () {
 
 \Illuminate\Support\Facades\Schedule::call(function () {
     \App\Models\MainCategoriesModel::updateMainCategories();
-})->weekly();
+});
+
+Artisan::command('icons', function () {
+    (new \App\Models\ChildCategoriesModel())->changeIcons();
+});
