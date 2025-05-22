@@ -4,13 +4,16 @@ namespace App\Models;
 
 use App\telegram\Parser;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 
 class MainCategoriesModel extends Model
 {
     protected $table = 'main_categories';
     protected $fillable = [
+        'category_id',
         'category_name',
         'icon',
+        'url',
         'created_at',
         'updated_at',
     ];
@@ -42,14 +45,24 @@ class MainCategoriesModel extends Model
 
     public static function updateMainCategories(): void
     {
-        $mainCategories = (new Parser())->parseMainCategories();
-        foreach ($mainCategories as $index => $mainCategory) {
-            $icon = self::ICON_ARRAY[$mainCategory] ?? self::ICON_ARRAY['default'];
-            MainCategoriesModel::updateOrCreate(
-                ['category_name' => $mainCategory],
-                ['icon' => $icon, 'updated_at' => now()]
-            );
-
+        try {
+            $categories = (new Parser())->getCategories();
+            foreach ($categories as $index => $mainCategory) {
+                $icon = self::ICON_ARRAY[$mainCategory['html']] ?? self::ICON_ARRAY['default'];
+                MainCategoriesModel::updateOrCreate(
+                    ['category_name' => $mainCategory['html']],
+                    ['category_id'=> $index,'icon' => $icon, 'url' => $mainCategory['url'], 'updated_at' => now()]
+                );
+                foreach ($mainCategory['rubs'] as $child) {
+                    ChildCategoriesModel::updateOrCreate(
+                        ['child_name' => $child['html']],
+                        ['parent_id' => $index, 'parent_icon' => $icon, 'url' => $child['url'], 'updated_at' => now()]
+                    );
+                }
+            }
+        } catch (\Exception $exception) {
+            Log::error("update categories error" . $exception->getMessage());
         }
+
     }
 }

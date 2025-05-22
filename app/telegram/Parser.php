@@ -6,6 +6,7 @@ use App\Models\MainCategoriesModel;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
 use DiDom\Document;
 use GuzzleHttp\Client;
+use GuzzleHttp\Cookie\CookieJar;
 use Spatie\Browsershot\Browsershot;
 
 class Parser extends WebhookHandler
@@ -23,10 +24,13 @@ class Parser extends WebhookHandler
         $this->categoriesUrl = 'https://makler.md/ru/categories';
     }
 
-
-    public function parseMainCategories()
+    public function getCategories(): array
     {
-        $response = $this->client->get($this->categoriesUrl, [
+        $jar = new CookieJar();
+        $response = $this->client->get('https://makler.md', [
+            'cookies' => $jar,
+        ]);
+        $response = $this->client->post($this->categoriesUrl, [
             'headers' => [
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
                 'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -34,60 +38,47 @@ class Parser extends WebhookHandler
                 'Referer' => 'https://makler.md/',
             ]
         ]);
+
         $html = $response->getBody()->getContents();
         $this->document->loadHTML($html);
-        $headers = $this->document->find('.tub a');
-        $mainCategories = [];
-        foreach ($headers as $index => $header) {
-            $mainCategories[] = trim($header->innerHtml());
-        }
-        return $mainCategories;
-    }
-
-
-    public function setMap()
-    {
-        $response = $this->client->get($this->categoriesUrl);
-        $html = $response->getBody()->getContents();
-        $this->document->loadHtml($html);
-
-        $document = $this->document;
-
-        $mainCategories = [];
-        foreach ($document->find('.tub a') as $node) {
-            $mainCategories[] = trim($node->text());
-        }
 
         $result = [];
+        $maps = $this->document->find('.map');
+        foreach ($maps as $map) {
+            $mains = $map->find('.tub a');
 
-        $colBlocks = $document->find('.col13');
-        foreach ($colBlocks as $index => $colBlock) {
-            $main = $mainCategories[$index] ?? 'Без категории';
+            foreach ($mains as $mainsIndex => $main) {
+                $res = [];
 
-            $result[$main] = [];
+                $url = str_replace(['/ru/', 'transnistria/'], '', $main->attr('href'));
+                $result[$mainsIndex] = [
+                    'html' => $main->innerHtml(),
+                    'url' => $url,
+                ];
 
-            $rubItems = $colBlock->find('ul.rub > li');
+                $rubs = $map->find('.clrfix .rub li a');
+                foreach ($rubs as $ind => $rub) {
+                    if (str_contains($rub->innerHtml(), '→')) {
+                        continue;
+                    }
 
-            foreach ($rubItems as $rubLi) {
-                $subCategoryAnchor = $rubLi->first('a');
-                if (!$subCategoryAnchor) continue;
+                    $urlRub = str_replace(['/ru/', 'transnistria/'], '', $rub->attr('href'));
 
-                $subCategory = trim($subCategoryAnchor->text());
-                $result[$main][$subCategory] = [];
+                    if (str_contains($urlRub, $url)) {
 
-                $subList = $rubLi->first('ul.sub');
-                if ($subList) {
-                    foreach ($subList->find('li a') as $childAnchor) {
-                        $result[$main][$subCategory][] = trim($childAnchor->text());
+                        $res[$ind] = [
+                            'html' => trim($rub->innerHtml()),
+                            'url' => $urlRub,
+                        ];
                     }
                 }
+                $result[$mainsIndex]['rubs'] = $res;
             }
         }
 
-        echo '<pre>';
-        print_r($result);
-        echo '</pre>';
-        exit();
+        return $result;
     }
+
+
 
 }
