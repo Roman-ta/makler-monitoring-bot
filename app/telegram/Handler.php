@@ -41,8 +41,6 @@ class Handler extends WebhookHandler
                     ])
             )
             ->send();
-
-
     }
 
     /**
@@ -52,7 +50,7 @@ class Handler extends WebhookHandler
     {
         $region = $this->data->get('region');
         $mainCategories = MainCategoriesModel::all()->toArray();
-        Log::info('q', $mainCategories);
+
         $keyboard = Keyboard::make();
         $row = [];
         foreach ($mainCategories as $category) {
@@ -64,7 +62,7 @@ class Handler extends WebhookHandler
             $keyboard->row($chunk);
         }
 
-        Telegraph::chat($this->chat->chat_id)->message('Выбери основную категорию')
+        Telegraph::chat($this->chat->chat_id)->message('🎯 Отлично! Теперь выбери основную категорию из списка ниже 👇')
             ->keyboard($keyboard)
             ->send();
     }
@@ -75,26 +73,72 @@ class Handler extends WebhookHandler
     public function getChildCategory(): void
     {
         $categoryId = $this->data->get('category_id');
+        $region = $this->data->get('region');
+
         $childCategories = ChildCategoriesModel::where('parent_id', $categoryId)->get()->toArray();
         $keyboard = Keyboard::make();
         $row = [];
         foreach ($childCategories as $category) {
-            $row[] = Button::make($category['parent_icon'] . $category['child_name'])->action('confirm');
+            $row[] = Button::make($category['parent_icon'] . $category['child_name'])->action('confirmLogic')
+                ->param('region', $region)->param('category_id', $categoryId)->param('child_id', $category['id']);
         }
         $chunks = array_chunk($row, 2);
         foreach ($chunks as $chunk) {
             $keyboard->row($chunk);
         }
-        Telegraph::chat($this->chat->chat_id)->message('Теперь можешь выбрать подкатегорию')->keyboard($keyboard)->send();
+        Telegraph::chat($this->chat->chat_id)->message('🧩 Почти готово! Выбери подходящую подкатегорию 🎨')->keyboard($keyboard)->send();
     }
 
-    public function confirm()
+    public function confirmLogic()
     {
+        $region = $this->data->get('region');
+        $categoryId = $this->data->get('category_id');
+        $child = $this->data->get('child_id');
+
+
+        $mainCategoryInfo = MainCategoriesModel::where('category_id', $categoryId)->first()->toArray();
+        $childCategoryInfo = ChildCategoriesModel::where('id', $child)->first()->toArray();
+
+        Telegraph::chat($this->chat->chat_id)->message("🚀 Отлично! Ты выбрал:\n\n🌍 Регион: *$region*\n📦 Категория: *{$mainCategoryInfo['category_name']}*\n📁 Подкатегория: *{$childCategoryInfo['child_name']}*\n\nВсе правильно? Подтверди, если всё ок! 😉")
+            ->keyboard(Keyboard::make()->row([
+                Button::make('Да, все верно')->action('confirmTime'),
+                Button::make('Нет')->action('test'),
+            ]))
+            ->send();
+
 
     }
+
+    public function confirmTime()
+    {
+        Telegraph::chat($this->chat->chat_id)->message("Я могу присылать объявления с выбранной тобой рубрики с периодичностью:")
+            ->keyboard(Keyboard::make()->row([
+                Button::make('1 мин')->action('finish'),
+                Button::make('2 мин')->action('finish'),
+                Button::make('5 мин')->action('finish')])
+                ->row(
+                    [Button::make('10 мин')->action('finish'),
+                    Button::make('15 мин')->action('finish'),
+                    Button::make('20 мин')->action('finish')])
+                ->row([
+                    Button::make('30 мин')->action('finish'),
+                    Button::make('1 час')->action('finish'),
+                    Button::make('2 часа')->action('finish'),
+                ])->row([
+                    Button::make('3 часа')->action('finish'),
+                    Button::make('6 часов')->action('finish'),
+                ])->row([
+                    Button::make('12 часов')->action('finish'),
+                    Button::make('24 часа')->action('finish'),
+                ]))
+            ->send();
+
+    }
+
 
     public function handleChatMessage($message): void
     {
+
         $this->reply($message);
     }
 
